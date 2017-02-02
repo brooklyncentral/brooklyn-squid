@@ -1,0 +1,119 @@
+brooklyn.catalog:
+  version: 0.2
+  id: squid-proxy
+  name: Squid Proxy
+  publish:
+    license_code: Apache-2.0
+  description: |
+    Squid Proxy http://www.squid-cache.org/ Supports CentOS 7 and Ubuntu 14
+  iconUrl: https://elearning.u-pem.fr/pluginfile.php/41404/course/overviewfiles/squid-logo.png
+  itemType: template
+  item:
+    brooklyn.parameters:
+    - name: squid.port
+      label: Squid Port
+      description: The port Squid should launch on
+      default: 3128
+    - name: username
+      label: Username
+      description: The Squid username
+      default: squid-user
+    - name: password
+      label: Password
+      description: The Squid password (max 8 chars)
+      default: C!0uDsfT
+    - name: settingsURL
+      label: Squid Config URL
+      description: A URL to download an initial config from
+    services:
+    - type: org.apache.brooklyn.entity.stock.BasicApplication
+      brooklyn.children:
+      - type: org.apache.brooklyn.entity.software.base.VanillaSoftwareProcess
+        id: squid-server
+        name: Squid Proxy Server
+        brooklyn.enrichers:
+        - type: org.apache.brooklyn.enricher.stock.Transformer
+          brooklyn.config:
+            uniqueTag: url-generator
+            enricher.sourceSensor: host.subnet.hostname
+            enricher.targetSensor: $brooklyn:sensor("org.apache.brooklyn.core.entity.Attributes", "main.uri")
+            enricher.targetValue:
+              $brooklyn:formatString:
+              - "%s:%s"
+              - $brooklyn:attributeWhenReady("host.address")
+              - $brooklyn:config("squid.port")
+        shell.env:
+          PORT: $brooklyn:config("squid.port")
+          USERNAME: $brooklyn:config("username")
+          PASSWORD: $brooklyn:config("password")
+          SETTINGS_URL: $brooklyn:config("settingsURL")
+
+        install.command: |
+          if [ -z "${PORT}" ]; then
+            PORT=3128
+          fi
+          if [ -z "${USERNAME}" ]; then
+            USERNAME=squid-user
+          fi
+          if [ -z "${PASSWORD}" ]; then
+            PASSWORD=C!0uDsfT
+          fi
+
+          SQUID_NAME="squid"
+          SQUID_USER="squid"
+          SQUID_AUTH="\/usr\/lib64\/squid\/basic_ncsa_auth"
+          if [ -n "$(command -v yum)" ] ; then
+            sudo yum -y install squid httpd-tools wget
+            sudo chkconfig squid on
+          elif [ -n "$(command -v apt-get)" ] ; then
+            # disable interactive stuff
+            echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections
+            export DEBIAN_FRONTEND=noninteractive
+            sudo apt-get install --yes squid apache2-utils wget
+            SQUID_NAME="squid3"
+            SQUID_USER="proxy"
+            SQUID_AUTH="\/usr\/lib\/squid3\/basic_ncsa_auth"
+          fi
+          # download any config
+          if [ -n "${SETTINGS_URL}" ]; then
+            # replace the squid config
+            echo "Replacing Squid config with ${SETTINGS_URL}"
+            wget -O squid.conf ${SETTINGS_URL}
+            sudo cp squid.conf /etc/$SQUID_NAME/squid.conf
+          else
+            # set up the u/p config
+            sudo touch /etc/$SQUID_NAME/passwd
+            sudo chown $SQUID_USER /etc/$SQUID_NAME/passwd
+            sudo htpasswd -bd /etc/$SQUID_NAME/passwd ${USERNAME} ${PASSWORD}
+
+            # insert at the top of the file
+            sudo sed -i "1s/^/http_access allow ncsa_users\n/" /etc/$SQUID_NAME/squid.conf
+            sudo sed -i "1s/^/acl ncsa_users proxy_auth REQUIRED\n/" /etc/$SQUID_NAME/squid.conf
+            sudo sed -i "1s/^/auth_param basic casesensitive off\n/" /etc/$SQUID_NAME/squid.conf
+            sudo sed -i "1s/^/auth_param basic credentialsttl 2 hours\n/" /etc/$SQUID_NAME/squid.conf
+            sudo sed -i "1s/^/auth_param basic realm Squid proxy-caching web server\n/" /etc/$SQUID_NAME/squid.conf
+            sudo sed -i "1s/^/auth_param basic children 5\n/" /etc/$SQUID_NAME/squid.conf
+            sudo sed -i "1s/^/auth_param basic program $SQUID_AUTH \/etc\/$SQUID_NAME\/passwd\n/" /etc/$SQUID_NAME/squid.conf
+            
+            # replace the current port
+            sudo sed -i "s/^\(http_port\s*\).*$/\1${PORT}/" /etc/$SQUID_NAME/squid.conf
+            sudo service $SQUID_NAME stop
+          fi
+        launch.command: |
+          if [ -n "$(command -v squid)" ] ; then
+            sudo service squid start || true
+          elif [ -n "$(command -v squid3)" ] ; then
+            sudo service squid3 start || true
+          fi
+        stop.command: |
+          if [ -n "$(command -v squid)" ] ; then
+            sudo service squid stop
+          elif [ -n "$(command -v squid3)" ] ; then
+            sudo service squid3 stop
+          fi
+        checkRunning.command: |
+          if [ -n "$(command -v squid)" ] ; then
+            sudo service squid status | grep running
+          elif [ -n "$(command -v squid3)" ] ; then
+            sudo service squid3 status | grep running
+          fi
