@@ -4,6 +4,7 @@ brooklyn.catalog:
   name: Squid Proxy
   publish:
     license_code: Apache-2.0
+    overview: README.md
   description: |
     Squid Proxy http://www.squid-cache.org/ Supports CentOS 7 and Ubuntu 14
   iconUrl: https://elearning.u-pem.fr/pluginfile.php/41404/course/overviewfiles/squid-logo.png
