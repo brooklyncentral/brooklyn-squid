@@ -71,7 +71,9 @@ brooklyn.catalog:
             echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections
             export DEBIAN_FRONTEND=noninteractive
             sudo apt-get install --yes squid apache2-utils wget
-            SQUID_NAME="squid3"
+            if [ -d "/etc/squid3" ]; then
+              SQUID_NAME="squid3"
+            fi
             SQUID_USER="proxy"
             SQUID_AUTH="\/usr\/lib\/squid3\/basic_ncsa_auth"
           fi
