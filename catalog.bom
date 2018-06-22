@@ -65,12 +65,14 @@ brooklyn.catalog:
           SQUID_AUTH="\/usr\/lib64\/squid\/basic_ncsa_auth"
           if [ -n "$(command -v yum)" ] ; then
             sudo yum -y install squid httpd-tools wget
+            sudo yum -y update openssl
             sudo chkconfig squid on
           elif [ -n "$(command -v apt-get)" ] ; then
             # disable interactive stuff
             echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections
             export DEBIAN_FRONTEND=noninteractive
             sudo apt-get install --yes squid apache2-utils wget
+            sudo apt-get update --yes openssl
             if [ -d "/etc/squid3" ]; then
               SQUID_NAME="squid3"
             fi
